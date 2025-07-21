@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Live Quiz Platform</title>
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial; background: #f2f2f2; padding: 20px; }
+        #quiz-container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 10px; }
+        h2 { color: #333; }
+        .question { margin-top: 20px; }
+        .options { list-style: none; padding: 0; }
+        .options li { margin-bottom: 10px; }
+        #leaderboard { margin-top: 30px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+<div id="quiz-container">
+    <h2>🎓 Real-Time Quiz Game</h2>
+    <div id="login">
+        <input type="text" id="username" placeholder="Enter your name" />
+        <button onclick="joinQuiz()">Join</button>
+    </div>
+
+    <div id="quiz" class="hidden">
+        <div id="joined-msg"></div>
+        <div class="question">
+            <h3 id="question-text"></h3>
+            <ul id="options" class="options"></ul>
+            <button onclick="submitAnswer()">Submit Answer</button>
+        </div>
+        <div id="feedback"></div>
+    </div>
+
+    <div id="result" class="hidden"></div>
+
+    <div id="leaderboard">
+        <h3>🏆 Leaderboard</h3>
+        <ul id="scores"></ul>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+    let username = '';
+    let currentIndex = 0;
+    let selectedOption = '';
+
+    function joinQuiz() {
+        username = document.getElementById("username").value;
+        if (username.trim() === '') return;
+        socket.emit('join', { username: username });
+        document.getElementById('login').classList.add('hidden');
+        document.getElementById('quiz').classList.remove('hidden');
+    }
+
+    socket.on('joined', function(data) {
+        document.getElementById('joined-msg').innerText = data.msg;
+    });
+
+    socket.on('question', function(data) {
+        currentIndex = data.index;
+        selectedOption = '';
+        document.getElementById('feedback').innerText = '';
+        document.getElementById('question-text').innerText = `Q${data.index}: ${data.question}`;
+        const optionsList = document.getElementById('options');
+        optionsList.innerHTML = '';
+        data.options.forEach(opt => {
+            const li = document.createElement('li');
+            li.innerHTML = `<label><input type="radio" name="option" value="${opt}"> ${opt}</label>`;
+            optionsList.appendChild(li);
+        });
+    });
+
+    function submitAnswer() {
+        const radios = document.getElementsByName('option');
+        for (const r of radios) {
+            if (r.checked) {
+                selectedOption = r.value;
+                break;
+            }
+        }
+        if (!selectedOption) return;
+        socket.emit('answer', { username: username, answer: selectedOption, question_index: currentIndex });
+    }
+
+    socket.on('answer_result', function(data) {
+        document.getElementById('feedback').innerText = data.msg;
+        updateLeaderboard(data.leaderboard);
+    });
+
+    socket.on('quiz_end', function(data) {
+        document.getElementById('quiz').classList.add('hidden');
+        document.getElementById('result').classList.remove('hidden');
+        document.getElementById('result').innerHTML = `<h3>${data.msg}</h3>`;
+        updateLeaderboard(data.leaderboard);
+    });
+
+    function updateLeaderboard(data) {
+        const scoreList = document.getElementById('scores');
+        scoreList.innerHTML = '';
+        const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
+        sorted.forEach(([user, score]) => {
+            const li = document.createElement('li');
+            li.innerText = `${user}: ${score}`;
+            scoreList.appendChild(li);
+        });
+    }
+</script>
+</body>
+</html>
